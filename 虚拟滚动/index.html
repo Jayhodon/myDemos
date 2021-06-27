@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" view="IE=edge">
+    <meta name="viewport" view="width=device-width, initial-scale=1.0">
+    <title>虚拟滚动</title>
+    <style>
+        .contain {
+            height: 180px;
+            width: 300px;
+            margin: 0 auto;
+            background-color: gray;
+            overflow: auto;
+        }
+
+        .item {
+            height: 18px;
+            border-bottom: 1px solid #ccc;
+            border-top: 1px solid #ccc;
+            width: 100%;
+            text-align: center;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="contain">
+
+        <div class="view">
+            <div class="item">0</div>
+            <div class="item">1</div>
+            <div class="item">2</div>
+            <div class="item">3</div>
+            <div class="item">4</div>
+            <div class="item">5</div>
+            <div class="item">6</div>
+            <div class="item">7</div>
+            <div class="item">8</div>
+            <div class="item">9</div>
+        </div>
+
+    </div>
+
+    <script>
+        var item = document.querySelector('.item');
+        var contain = document.querySelector('.contain');
+
+        var start = 0;
+        var size = 10;
+        var total = 10000;
+
+        var itemStyle = getComputedStyle(item);
+        var itemHeight = Number(itemStyle.height.split('px')[0]) + Number(itemStyle.borderTopWidth.split('px')[0]) + Number(itemStyle.borderBottomWidth.split('px')[0]);
+        document.querySelector('.view').style.height = itemHeight * total + 'px';
+
+        update(start, size, itemHeight, 0);
+
+        function update(start, size, itemHeight, height) {
+            document.querySelector('.view').style.transform = 'translateY(' + height + 'px)';
+            let all = document.querySelectorAll('.item');
+            for (var i = start, itemIndex = 0, len = start + size; i < len; i++, itemIndex++) {
+                var index = i % size; 
+                all[itemIndex].innerHTML = i;
+            }
+        }
+
+        function handleScroller() {
+            var lastStart = 0; 
+            return () => {
+                var currentScrollTop = contain.scrollTop;
+                var fixedScrollTop = currentScrollTop - currentScrollTop % itemHeight;
+                var start = Math.floor(currentScrollTop / itemHeight);
+
+                if (lastStart !== start) {
+                    lastStart = start;
+                    update(start, size, itemHeight, fixedScrollTop);
+                }
+            }
+        }
+        document.querySelector('.contain').addEventListener('scroll', handleScroller(), false);
+    </script>
+</body>
+
+</html>

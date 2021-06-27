@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <title>图片压缩剪切以及马赛克</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 1200px;
+      margin: 0 auto;
+    }
+
+    .top {
+      margin: 20px 0;
+    }
+
+    .generate {
+      margin-left: 20px;
+      cursor: pointer;
+    }
+
+    .original {
+      width: 600px;
+      height: 500px;
+      border: 1px solid #eee;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .production {
+      margin: 20px;
+      text-align: center;
+    }
+
+    .box {
+      float: left;
+      position: relative;
+      overflow: hidden;
+      border: 1px dashed #999;
+    }
+
+    .mask {
+      position: absolute;
+      border: 1px dashed #eee;
+      background: rgba(112, 46, 36, 0.6);
+      left: 5px;
+      top: 5px;
+    }
+
+    .symbol {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      bottom: 0;
+      right: 0px;
+      background-color: #0b2;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="top">
+      <input type="file" onchange="updateFile(event)" />
+      压缩
+      <select onchange="compress(event)" id="sel">
+        <option>1.0</option>
+        <option>0.8</option>
+        <option>0.5</option>
+        <option>0.1</option>
+      </select>
+      <a class="generate" onclick="crop()">剪切</a>
+    </div>
+
+    <div class="original" id="original">
+      <div class="box" id="box"></div>
+    </div>
+    <div class="production" id="production"></div>
+  </div>
+</body>
+<script>
+
+  const img_types = ['image/jpeg', 'image/png'];
+
+  let img = null,
+    compress_img = null,
+    crop_obj = null;
+
+  async function updateFile(e) {
+    const file = e.target.files[0];
+    const base64Code = await new Promise((resolve) => {
+      const fileReader = new FileReader();
+      fileReader.onload = (e) => {
+        resolve(e.target.result);
+      };
+      fileReader.readAsDataURL(file);
+    });
+    placeImg(base64Code); 
+  }
+
+
+  function placeImg(code) {
+    const target = document.getElementById('original');
+    const max_width = parseInt(getComputedStyle(target).width);
+    const max_height = parseInt(getComputedStyle(target).height);
+    let width, height;
+    const image = new Image();
+    image.src = code;
+    image.onload = () => {
+      const naturalWidth = image.naturalWidth;
+      const naturalHeight = image.naturalHeight;
+      const radio = naturalWidth / naturalHeight;
+      if (radio >= 1) {
+        width = naturalWidth < max_width ? naturalWidth : max_width;
+        height = (width * 1) / radio;
+        if (height > max_height) {
+          height = max_height;
+          width = height * radio;
+        }
+      } else {
+        height = naturalHeight < max_height ? naturalHeight : max_height;
+        width = height * radio;
+        if (width > max_width) {
+          width = max_width;
+          height = (width * 1) / radio;
+        }
+      }
+      width = parseInt(width);
+      height = parseInt(height);
+      const box = document.getElementById('box');
+      box.style.width = `${width}px`;
+      box.style.height = `${height}px`;
+      image.style.width = `${width}px`;
+      image.style.height = `${height}px`;
+      box.style.background = `url(${code}) no-repeat`;
+      box.style.backgroundSize = '100% 100%';
+      img = image;
+      compress();
+    };
+  }
+
+  function compress() {
+    if (!img) {
+      return false;
+    }
+    const value = Number(document.getElementById('sel').value);
+    const canvas = document.createElement('CANVAS');
+    const w = parseInt(img.style.width),
+      h = parseInt(img.style.height);
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const code = canvas.toDataURL('image/jpeg', value);
+    const image = new Image();
+    image.src = code;
+    image.onload = () => {
+      const des = document.getElementById('production');
+      des.innerHTML = '';
+      des.appendChild(image);
+      compress_img = image;
+    };
+  }
+
+  function crop() {
+    const obj = new cropImg({
+      target: 'box',
+      callback({
+        left,
+        top,
+        width,
+        height,
+        container_height,
+        container_width,
+      }) {
+        const canvas_bak = document.createElement('CANVAS');
+        const ctx_bak = canvas_bak.getContext('2d');
+        canvas_bak.width = container_width;
+        canvas_bak.height = container_height;
+        ctx_bak.drawImage(img, 0, 0, container_width, container_height);
+
+        const canvas = document.createElement('CANVAS');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(
+          canvas_bak,
+          left,
+          top,
+          width,
+          height,
+          0,
+          0,
+          width,
+          height
+        );
+
+        const value = Number(document.getElementById('sel').value);
+        const code = canvas.toDataURL('image/jpeg', value);
+        const image = new Image();
+        image.src = code;
+        image.onload = () => {
+          const des = document.getElementById('production');
+          des.innerHTML = '';
+          des.appendChild(image);
+          compress_img = image;
+        };
+      },
+    });
+
+    return obj;
+  }
+  function cropImg(options) {
+    this.target = document.getElementById(options.target) || document;
+    this.width = 0;
+    this.height = 0;
+    this.container_width = 0;
+    this.container_height = 0;
+    this.container_clicked = false;
+    this.symbol_clicked = false;
+    this.start_x = 0;
+    this.start_y = 0;
+    this.timer = null;
+    this.mouse_index = 0;
+    this.callback = options.callback || function () { };
+    this.fun_list = []; 
+    this.init();
+  }
+
+  cropImg.prototype.init = function () {
+    this.renderBox(); 
+    this.renderSymbol(); 
+    this.mouseUp(); 
+  };
+
+  cropImg.prototype.renderBox = function () {
+    const width = (this.container_width = parseInt(
+      getComputedStyle(this.target).width
+    ));
+    const height = (this.container_height = parseInt(
+      getComputedStyle(this.target).height
+    ));
+    this.radio = width / height;
+    this.width = parseInt(width / 3);
+    this.height = parseInt(height / 3);
+    const container = document.createElement('DIV');
+    container.style.width = `${this.width}px`;
+    container.style.height = `${this.height}px`;
+    container.style.left = `${this.container_width / 2 - this.width / 2}px`; 
+    container.style.top = `${this.container_height / 2 - this.height / 2}px`;
+    container.setAttribute('class', 'mask');
+
+    this.bindMouseEvent({
+      mousedown: {
+        element: container,
+      },
+      mousemove: {
+        element: container,
+        callback(e, start_x, start_y) {
+          const x = e.pageX - start_x;
+          const y = e.pageY - start_y;
+          let top = parseInt(getComputedStyle(this.mask).top);
+          let left = parseInt(getComputedStyle(this.mask).left);
+          top += y;
+          left += x;
+          left = left < 0 ? 0 : left;
+          left =
+            left > this.container_width - this.width
+              ? this.container_width - this.width
+              : left;
+          top = top < 0 ? 0 : top;
+          top =
+            top > this.container_height - this.height
+              ? this.container_height - this.height
+              : top;
+          this.mask.style.top = `${top}px`;
+          this.mask.style.left = `${left}px`;
+        },
+      },
+    });
+
+    this.mask = container;
+    this.target.appendChild(container);
+  };
+
+  cropImg.prototype.renderSymbol = function () {
+    const symbol = document.createElement('DIV');
+    symbol.setAttribute('class', 'symbol');
+    this.bindMouseEvent({
+      mousedown: {
+        element: symbol,
+      },
+      mousemove: {
+        element: [this.target, this.mask],
+        callback(e, start_x) {
+          const x = e.pageX - start_x;
+          const width = parseInt(getComputedStyle(this.mask).width) + x;
+          const height = parseInt((width * 1) / this.radio);
+          this.mask.style.width = `${width}px`;
+          this.mask.style.height = `${height}px`;
+          this.width = width;
+          this.height = height;
+        },
+      },
+    });
+    this.symbol = symbol;
+    this.mask.appendChild(symbol);
+  };
+
+  cropImg.prototype.strategyEvent = function (key, idx) {
+    function mousedown(e) {
+      e.stopPropagation();
+      this[`mouse_${idx}`] = true; 
+      this[`start_x${idx}`] = e.pageX;
+      this[`start_y${idx}`] = e.pageY;
+    }
+
+    function mousemove(e, callback) {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!this[`mouse_${idx}`]) {
+        return false;
+      }
+      if (this[`timer${idx}`]) {
+        return false;
+      }
+      this[`timer${idx}`] = setTimeout(() => {
+        callback.call(this, e, this[`start_x${idx}`], this[`start_y${idx}`]);
+        this[`start_x${idx}`] = e.pageX;
+        this[`start_y${idx}`] = e.pageY;
+        clearTimeout(this[`timer${idx}`]);
+        this[`timer${idx}`] = null;
+      }, 20);
+    }
+
+    const funList = { mousedown, mousemove };
+
+    return funList[key];
+  };
+
+  cropImg.prototype.mouseUp = function () {
+    Array.from(Array(this.mouse_index)).forEach((value, idx) => {
+      this[`mouse_${idx + 1}`] = false;
+    });
+    const { top, left } = this.mask.style;
+    this.callback({
+      width: this.width,
+      height: this.height,
+      top: parseInt(top),
+      left: parseInt(left),
+      container_height: this.container_height,
+      container_width: this.container_width,
+    });
+  };
+
+  cropImg.prototype.mouseUpHandler = function () {
+    if (this.mouse_index > 0) {
+      return false;
+    }
+    this.fun_list.push({
+      ele: document,
+      fn: this.mouseUp,
+      event: 'mouseup',
+    });
+    document.addEventListener('mouseup', this.mouseUp.bind(this));
+    return this.mouseUp;
+  };
+
+  cropImg.prototype.bindMouseEvent = function (params) {
+    this.mouseUpHandler(); 
+
+    this.mouse_index++;
+
+    for (let key in params) {
+      const value = params[key]; 
+      let { element, callback } = value;
+      const defaultFn = this.strategyEvent(key, this.mouse_index);
+      if (!defaultFn) {
+        continue;
+      }
+      element = Array.isArray(element) ? element : [element]; 
+      element.forEach((ele) => {
+        const fn = (e) => {
+          defaultFn.call(this, e, callback);
+        };
+        this.fun_list.push({
+          ele,
+          fn,
+          event: key,
+        });
+        ele.addEventListener(key, fn);
+      });
+    }
+  };
+
+  cropImg.prototype.destory = function () {
+    this.fun_list.forEach(({ ele, fn, event }) => {
+      ele.removeEventListener(event, fn);
+    });
+  };
+
+</script>
+
+</html>
